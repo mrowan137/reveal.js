@@ -1,0 +1,1047 @@
+<!doctype html>
+<html lang="en">
+
+	<head>
+		<meta charset="utf-8">
+
+        <title>In-Situ Assessment of Device-Side Compute Work for Dynamic Load Balancing in a GPU-Accelerated PIC Code</title>
+        <meta name="description" content="Presentation slides">
+	    <meta name="author" content="Michael E. Rowan">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+        <meta name="apple-mobile-web-app-capable" content="yes">
+	    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+        
+		<link rel="stylesheet" href="../dist/reveal.css">
+
+		<link rel="stylesheet" href="../dist/theme/my_theme.css" id="theme">
+		<link rel="stylesheet" href="../plugin/highlight/zenburn.css">
+
+	    <!-- Printing and PDF exports -->
+	    <script>
+		  var link = document.createElement( 'link' );
+		  link.rel = 'stylesheet';
+		  link.type = 'text/css';
+		  link.href = window.location.search.match( /print-pdf/gi ) ? 'css/print/pdf.css' : 'css/print/paper.css';
+		  document.getElementsByTagName( 'head' )[0].appendChild( link );
+	    </script>
+	</head>
+    
+	<body>
+
+		<div class="reveal">
+
+		  <div class="slides">
+            <section data-auto-animate data-auto-animate-unmatched="fade">
+              <div style="position: absolute; top: 30%; margin-bottom:20px;">
+			    <h3>
+                  In-Situ Assessment of Device-Side Compute Work for Dynamic Load Balancing in a GPU-Accelerated PIC Code
+                </h3>
+
+			    <p style="text-align: center; margin-top: 40px;">
+				  <small> Michael Rowan
+                    <br>  Work with Kevin Gott, Axel Huebl, Jack Deslippe
+                    <br>  See preprint here: <a href="https://arxiv.org/abs/2104.11385"> https://arxiv.org/abs/2104.11385 </a>
+                    <br>  PASC '21 — 07.05.2021
+                  </small>
+			    </p>
+              </div>
+			  <!-- <div class="ctr w100"> -->
+			  <!--   <img src="title_pic.png" style="border: 4px solid RoyalBlue; border-radius:10px;"> -->
+			  <!-- </div> -->
+			</section>
+
+            <section data-auto-animate data-auto-animate-unmatched="fade" data-transition-speed="fast">
+			  <h2> Outline: </h2>
+              <ol style="position: absolute; width: 100%; height: 25%; top: 4%; bottom: 0; right: 0; left: 23%; margin: auto;">
+                <li> <span style="color:LimeGreen"> Load balancing intro </span> </li>
+                <li> Dynamic load balancing in <br>PIC code run on GPUs</li>
+			  </ol>
+			</section>
+            
+            <section data-auto-animate data-auto-animate-unmatched="fade" data-transition-speed="fast">
+			<h2> GPU-accelerated machines entered the TOP500 rankings just over a decade ago. </h2>
+            <div style="position: absolute; top: 18%;">
+              <div class="w50" style="float:left">
+                <figure>
+                  <figcaption> Nov. 2008 </figcaption>
+                  <img src="figs/nov2008top500.png" style="margin: 0 0 0 0; border: 4px solid RoyalBlue;border-radius:10px; width: 80%;">
+                </figure>
+              </div>
+              
+              <div class="w50" style="float:right">
+                <figure>
+                  <figcaption> Nov. 2020 </figcaption>
+                  <img src="figs/nov2020top500.png" style="margin: 0 0 0 0; border: 4px solid RoyalBlue;border-radius:10px; width: 70%;">
+                </figure>
+              </div>
+
+              <!-- Highlight GPU computers -->
+              <div class="fragment">
+                <div style="background: LimeGreen; opacity: 0.4; position: absolute; top: 27.6%; left: 60.5%; width: 29%; height: 7.6%; border-radius: 4px;"></div>
+                <div style="background: LimeGreen; opacity: 0.4; position: absolute; top: 35.2%; left: 60.5%; width: 29%; height: 7.8%; border-radius: 4px;"></div>
+                <div style="background: LimeGreen; opacity: 0.4; position: absolute; top: 49.6%; left: 60.5%; width: 29%; height: 6.5%; border-radius: 4px;"></div>
+                <div style="background: LimeGreen; opacity: 0.4; position: absolute; top: 62.6%; left: 60.5%; width: 29%; height: 7.9%; border-radius: 4px;"></div>
+                <div style="background: LimeGreen; opacity: 0.4; position: absolute; top: 70.5%; left: 60.5%; width: 29%; height: 6.5%; border-radius: 4px;"></div>
+                <div style="background: LimeGreen; opacity: 0.4; position: absolute; top: 83.5%; left: 60.5%; width: 29%; height: 6.4%; border-radius: 4px;"></div>
+                
+              </div>
+            </div>
+			</section>
+
+            <section data-auto-animate data-auto-animate-unmatched="fade" data-transition-speed="fast">
+			    <h2> How do we get optimal performance from these supercomputers? </h2>
+                <ul style="position: absolute; width: 50%; height: 25%; top: 12%; bottom: 0; right: 0; left: 0; margin: auto;">
+                  <li> Compilers                  </li>
+                  <li> Algorithms/data structures </li>
+                  <li> <span class="fragment highlight-green"> Load balancing</span> </li>
+			    </ul>
+			</section>
+            
+            <section data-auto-animate data-auto-animate-unmatched="fade">
+			  <h2> Particle-mesh codes parallelize via <i>domain decomposition</i>. </h2>
+              <!-- <p> [animation grid with particles (load balanced) > chunks of work on MPI ranks] </p> -->
+              <!-- <p> [introduce concept of <i>distribution mapping</i>] </p> -->
+              <div data-id="1" style="background: CornSilk; border: 8px solid Gray; border-radius:10px;
+                                      position: absolute; top: 175px; left: 250px; width: 450px; height: 450px;"></div>
+                
+			</section>
+              
+            
+            <section data-auto-animate data-auto-animate-unmatched="fade" data-transition="none">
+			  <h2> Particle-mesh codes parallelize via <i>domain decomposition</i>. </h2>
+              <!-- <p> [animation grid with particles (load balanced) > chunks of work on MPI ranks] </p> -->
+              <!-- <p> [introduce concept of <i>distribution mapping</i>] </p> -->
+              <div data-id="1" style="background: CornSilk; border: 8px solid Gray; border-radius:10px;
+                                      position: absolute; top: 175px; left: 250px; width: 450px; height: 450px;"></div>
+              
+              <!-- Grid -->
+              <div data-id="h1" style="border:none; border-top:4px dashed Gray;
+                                       position: absolute; top: 295.5px; left: 258px; width: 450px; height: 5px;"></div>
+              <div data-id="h2" style="border:none; border-top:4px dashed Gray;
+                                       position: absolute; top: 408px; left: 258px; width: 450px; height: 5px;"></div>
+              <div data-id="h3" style="border:none; border-top:4px dashed Gray;
+                                       position: absolute; top: 520.5px; left: 258px; width: 450px; height: 5px;"></div>
+              
+              <div data-id="v1" style="border:none; border-left:4px dashed Gray;
+                                       position: absolute; top: 183px; left: 370.5px; width: 5px; height: 450px;"></div>
+              <div data-id="v2" style="border:none; border-left:4px dashed Gray;
+                                       position: absolute; top: 183px; left: 483px; width: 5px; height: 450px;"></div>
+              <div data-id="v3" style="border:none; border-left:4px dashed Gray;
+                                       position: absolute; top: 183px; left: 595.5px; width: 5px; height: 450px;"></div>
+            </section>
+
+            <section data-auto-animate data-auto-animate-unmatched="fade" data-transition="none">
+			  <h2> Particle-mesh codes parallelize via <i>domain decomposition</i>. </h2>
+              <!-- <p> [animation grid with particles (load balanced) > chunks of work on MPI ranks] </p> -->
+              <!-- <p> [introduce concept of <i>distribution mapping</i>] </p> -->
+              <div data-id="1" style="background: CornSilk; border: 8px solid Gray; border-radius:10px;
+                                      position: absolute; top: 175px; left: 250px; width: 450px; height: 450px;"></div>
+              
+              <!-- Grid -->
+              <div data-id="h1" style="border:none; border-top:4px dashed Gray;
+                                       position: absolute; top: 295.5px; left: 258px; width: 450px; height: 5px;"></div>
+              <div data-id="h2" style="border:none; border-top:4px dashed Gray;
+                                       position: absolute; top: 408px; left: 258px; width: 450px; height: 5px;"></div>
+              <div data-id="h3" style="border:none; border-top:4px dashed Gray;
+                                       position: absolute; top: 520.5px; left: 258px; width: 450px; height: 5px;"></div>
+              
+              <div data-id="v1" style="border:none; border-left:4px dashed Gray;
+                                       position: absolute; top: 183px; left: 370.5px; width: 5px; height: 450px;"></div>
+              <div data-id="v2" style="border:none; border-left:4px dashed Gray;
+                                       position: absolute; top: 183px; left: 483px; width: 5px; height: 450px;"></div>
+              <div data-id="v3" style="border:none; border-left:4px dashed Gray;
+                                       position: absolute; top: 183px; left: 595.5px; width: 5px; height: 450px;"></div>
+
+              <!-- Particles -->
+              <div data-id="p1" style="background: RoyalBlue; position: absolute; top: 253px; left: 300px;
+                                       width: 35px; height: 35px; margin: -17.5px 0 0 -17.5px; border-radius: 35px;"></div>
+              <div data-id="p2" style="background: RoyalBlue; position: absolute; top: 343px; left: 450px;
+                                       width: 35px; height: 35px; margin: -17.5px 0 0 -17.5px; border-radius: 35px;"></div>
+              
+              <div data-id="p3" style="background: RoyalBlue; position: absolute; top: 307px; left: 510px;
+                                       width: 35px; height: 35px; margin: -17.5px 0 0 -17.5px; border-radius: 35px;"></div>
+              <div data-id="p4" style="background: RoyalBlue; position: absolute; top: 265px; left: 665px;
+                                       width: 35px; height: 35px; margin: -17.5px 0 0 -17.5px; border-radius: 35px;"></div>
+
+              <div data-id="p5" style="background: RoyalBlue; position: absolute; top: 584px; left: 343px;
+                                       width: 35px; height: 35px; margin: -17.5px 0 0 -17.5px; border-radius: 35px;"></div>
+              <div data-id="p6" style="background: RoyalBlue; position: absolute; top: 445px; left: 407px;
+                                       width: 35px; height: 35px; margin: -17.5px 0 0 -17.5px; border-radius: 35px;"></div>
+              
+              <div data-id="p7" style="background: RoyalBlue; position: absolute; top: 536px; left: 536px;
+                                       width: 35px; height: 35px; margin: -17.5px 0 0 -17.5px; border-radius: 35px;"></div>
+              <div data-id="p8" style="background: RoyalBlue; position: absolute; top: 523px; left: 635px;
+                                       width: 35px; height: 35px; margin: -17.5px 0 0 -17.5px; border-radius: 35px;"></div>
+                            
+            </section>
+
+            <section data-auto-animate data-auto-animate-unmatched="fade" data-transition="none">
+			  <h2> Particle-mesh codes parallelize via <i>domain decomposition</i>. </h2>
+              <!-- <p> [animation grid with particles (load balanced) > chunks of work on MPI ranks] </p> -->
+              <!-- <p> [introduce concept of <i>distribution mapping</i>] </p> -->
+              <div data-id="1" style="background: CornSilk; border: 8px solid Gray; border-radius:10px;
+                                      position: absolute; top: 175px; left: 250px; width: 450px; height: 450px;"></div>
+
+              <!-- Cells copies -->
+              <div data-id="c1" style="background: CornSilk;
+                                       position: absolute; top: 183px; left: 258px; width: 225px; height: 225px;"></div>
+              <div data-id="c2" style="background: CornSilk;
+                                       position: absolute; top: 408px; left: 258px; width: 225px; height: 225px;"></div>
+              <div data-id="c3" style="background: CornSilk;
+                                       position: absolute; top: 183px; left: 483px; width: 225px; height: 225px;"></div>
+              <div data-id="c4" style="background: CornSilk;
+                                       position: absolute; top: 408px; left: 483px; width: 225px; height: 225px;"></div>
+              
+              <!-- Grid -->
+              <div data-id="h1" style="border:none; border-top:4px dashed Gray;
+                                       position: absolute; top: 295.5px; left: 258px; width: 450px; height: 5px;"></div>
+              <div data-id="h2" style="border:none; border-top:4px dashed Gray;
+                                       position: absolute; top: 408px; left: 258px; width: 450px; height: 5px;"></div>
+              <div data-id="h3" style="border:none; border-top:4px dashed Gray;
+                                       position: absolute; top: 520.5px; left: 258px; width: 450px; height: 5px;"></div>
+              
+              <div data-id="v1" style="border:none; border-left:4px dashed Gray;
+                                       position: absolute; top: 183px; left: 370.5px; width: 5px; height: 450px;"></div>
+              <div data-id="v2" style="border:none; border-left:4px dashed Gray;
+                                       position: absolute; top: 183px; left: 483px; width: 5px; height: 450px;"></div>
+              <div data-id="v3" style="border:none; border-left:4px dashed Gray;
+                                       position: absolute; top: 183px; left: 595.5px; width: 5px; height: 450px;"></div>
+
+              <!-- Particles -->
+              <div data-id="p1" style="background: RoyalBlue; position: absolute; top: 253px; left: 300px;
+                                       width: 35px; height: 35px; margin: -17.5px 0 0 -17.5px; border-radius: 35px;"></div>
+              <div data-id="p2" style="background: RoyalBlue; position: absolute; top: 343px; left: 450px;
+                                       width: 35px; height: 35px; margin: -17.5px 0 0 -17.5px; border-radius: 35px;"></div>
+              
+              <div data-id="p3" style="background: RoyalBlue; position: absolute; top: 307px; left: 510px;
+                                       width: 35px; height: 35px; margin: -17.5px 0 0 -17.5px; border-radius: 35px;"></div>
+              <div data-id="p4" style="background: RoyalBlue; position: absolute; top: 265px; left: 665px;
+                                       width: 35px; height: 35px; margin: -17.5px 0 0 -17.5px; border-radius: 35px;"></div>
+
+              <div data-id="p5" style="background: RoyalBlue; position: absolute; top: 584px; left: 343px;
+                                       width: 35px; height: 35px; margin: -17.5px 0 0 -17.5px; border-radius: 35px;"></div>
+              <div data-id="p6" style="background: RoyalBlue; position: absolute; top: 445px; left: 407px;
+                                       width: 35px; height: 35px; margin: -17.5px 0 0 -17.5px; border-radius: 35px;"></div>
+              
+              <div data-id="p7" style="background: RoyalBlue; position: absolute; top: 536px; left: 536px;
+                                       width: 35px; height: 35px; margin: -17.5px 0 0 -17.5px; border-radius: 35px;"></div>
+              <div data-id="p8" style="background: RoyalBlue; position: absolute; top: 523px; left: 635px;
+                                       width: 35px; height: 35px; margin: -17.5px 0 0 -17.5px; border-radius: 35px;"></div>
+
+              <!-- Rank delineation -->
+              <div data-id="H2" style="border:none; border-top:8px solid Gray;
+                                       position: absolute; top: 408px; left: 258px; width: 450px; height: 5px;"></div>
+              <div data-id="V2" style="border:none; border-left:8px solid Gray;
+                                       position: absolute; top: 183px; left: 483px; width: 5px; height: 450px;"></div>
+
+              <p data-id="b1" style="background: Gray; line-height: 40px; position: absolute; border-radius: 4px;
+                                             top: 260.5px; left: 353.5px; padding-left: 10px; padding-right: 10px;"> 0 </p>
+              <p data-id="b2" style="background: Gray; line-height: 40px; position: absolute; border-radius: 4px;
+                                             top: 260.5px; left: 578.5px; padding-left: 10px; padding-right: 10px;"> 1 </p>
+              <p data-id="b3" style="background: Gray; line-height: 40px; position: absolute; border-radius: 4px;
+                                             top: 485.5px; left: 353.5px; padding-left: 10px; padding-right: 10px;"> 1 </p>
+              <p data-id="b4" style="background: Gray; line-height: 40px; position: absolute; border-radius: 4px;
+                                      top: 485.5px; left: 578.5px; padding-left: 10px; padding-right: 10px;"> 0 </p>
+
+              <p data-id="bc1" style="background: Gray; line-height: 40px; position: absolute; border-radius: 4px;
+                                             top: 260.5px; left: 353.5px; padding-left: 10px; padding-right: 10px;"> 0 </p>
+              <p data-id="bc2" style="background: Gray; line-height: 40px; position: absolute; border-radius: 4px;
+                                             top: 260.5px; left: 578.5px; padding-left: 10px; padding-right: 10px;"> 1 </p>
+              <p data-id="bc3" style="background: Gray; line-height: 40px; position: absolute; border-radius: 4px;
+                                             top: 485.5px; left: 353.5px; padding-left: 10px; padding-right: 10px;"> 1 </p>
+              <p data-id="bc4" style="background: Gray; line-height: 40px; position: absolute; border-radius: 4px;
+                                             top: 485.5px; left: 578.5px; padding-left: 10px; padding-right: 10px;"> 0 </p>
+
+              <!-- Particles copies -->
+              <div data-id="pc1" style="background: RoyalBlue; position: absolute; top: 253px; left: 300px;
+                                       width: 35px; height: 35px; margin: -17.5px 0 0 -17.5px; border-radius: 35px;"></div>
+              <div data-id="pc2" style="background: RoyalBlue; position: absolute; top: 343px; left: 450px;
+                                       width: 35px; height: 35px; margin: -17.5px 0 0 -17.5px; border-radius: 35px;"></div>
+              
+              <div data-id="pc3" style="background: RoyalBlue; position: absolute; top: 307px; left: 510px;
+                                       width: 35px; height: 35px; margin: -17.5px 0 0 -17.5px; border-radius: 35px;"></div>
+              <div data-id="pc4" style="background: RoyalBlue; position: absolute; top: 265px; left: 665px;
+                                       width: 35px; height: 35px; margin: -17.5px 0 0 -17.5px; border-radius: 35px;"></div>
+
+              <div data-id="pc5" style="background: RoyalBlue; position: absolute; top: 584px; left: 343px;
+                                       width: 35px; height: 35px; margin: -17.5px 0 0 -17.5px; border-radius: 35px;"></div>
+              <div data-id="pc6" style="background: RoyalBlue; position: absolute; top: 445px; left: 407px;
+                                       width: 35px; height: 35px; margin: -17.5px 0 0 -17.5px; border-radius: 35px;"></div>
+              
+              <div data-id="pc7" style="background: RoyalBlue; position: absolute; top: 536px; left: 536px;
+                                       width: 35px; height: 35px; margin: -17.5px 0 0 -17.5px; border-radius: 35px;"></div>
+              <div data-id="pc8" style="background: RoyalBlue; position: absolute; top: 523px; left: 635px;
+                                        width: 35px; height: 35px; margin: -17.5px 0 0 -17.5px; border-radius: 35px;"></div>
+              
+            </section>
+
+            <section data-auto-animate data-auto-animate-unmatched="fade" data-transition="none">
+			  <h2> Particle-mesh codes parallelize via <i>domain decomposition</i>. </h2>
+              <div data-id="1" style="background: CornSilk; border: 8px solid Gray; border-radius:10px;
+                                      position: absolute; top: 175px; left: 0px; width: 450px; height: 450px;"></div>
+              
+              <!-- Grid -->
+              <div data-id="h1" style="border:none; border-top:4px dashed Gray;
+                                       position: absolute; top: 295.5px; left: 8px; width: 450px; height: 5px;"></div>
+              <div data-id="h2" style="border:none; border-top:4px dashed Gray;
+                                       position: absolute; top: 408px; left: 8px; width: 450px; height: 5px;"></div>
+              <div data-id="h3" style="border:none; border-top:4px dashed Gray;
+                                       position: absolute; top: 520.5px; left: 8px; width: 450px; height: 5px;"></div>
+              
+              <div data-id="v1" style="border:none; border-left:4px dashed Gray;
+                                       position: absolute; top: 183px; left: 120.5px; width: 5px; height: 450px;"></div>
+              <div data-id="v2" style="border:none; border-left:4px dashed Gray;
+                                       position: absolute; top: 183px; left: 233px; width: 5px; height: 450px;"></div>
+              <div data-id="v3" style="border:none; border-left:4px dashed Gray;
+                                       position: absolute; top: 183px; left: 345.5px; width: 5px; height: 450px;"></div>
+
+              <!-- Particles -->
+              <div data-id="p1" style="background: RoyalBlue; position: absolute; top: 253px; left: 50px;
+                                       width: 35px; height: 35px; margin: -17.5px 0 0 -17.5px; border-radius: 35px;"></div>
+              <div data-id="p2" style="background: RoyalBlue; position: absolute; top: 343px; left: 200px;
+                                       width: 35px; height: 35px; margin: -17.5px 0 0 -17.5px; border-radius: 35px;"></div>
+              
+              <div data-id="p3" style="background: RoyalBlue; position: absolute; top: 307px; left: 260px;
+                                       width: 35px; height: 35px; margin: -17.5px 0 0 -17.5px; border-radius: 35px;"></div>
+              <div data-id="p4" style="background: RoyalBlue; position: absolute; top: 265px; left: 415px;
+                                       width: 35px; height: 35px; margin: -17.5px 0 0 -17.5px; border-radius: 35px;"></div>
+
+              <div data-id="p5" style="background: RoyalBlue; position: absolute; top: 584px; left: 93px;
+                                       width: 35px; height: 35px; margin: -17.5px 0 0 -17.5px; border-radius: 35px;"></div>
+              <div data-id="p6" style="background: RoyalBlue; position: absolute; top: 445px; left: 157px;
+                                       width: 35px; height: 35px; margin: -17.5px 0 0 -17.5px; border-radius: 35px;"></div>
+              
+              <div data-id="p7" style="background: RoyalBlue; position: absolute; top: 536px; left: 286px;
+                                       width: 35px; height: 35px; margin: -17.5px 0 0 -17.5px; border-radius: 35px;"></div>
+              <div data-id="p8" style="background: RoyalBlue; position: absolute; top: 523px; left: 385px;
+                                       width: 35px; height: 35px; margin: -17.5px 0 0 -17.5px; border-radius: 35px;"></div>
+
+              <!-- Rank delineation -->
+              <div data-id="H2" style="border:none; border-top:8px solid Gray;
+                                       position: absolute; top: 408px; left: 8px; width: 450px; height: 5px;"></div>
+              <div data-id="V2" style="border:none; border-left:8px solid Gray;
+                                       position: absolute; top: 183px; left: 233px; width: 5px; height: 450px;"></div>
+
+              <p data-id="b1" style="background: Gray; line-height: 40px; position: absolute; border-radius: 4px;
+                                             top: 260.5px; left: 103.5px; padding-left: 10px; padding-right: 10px;"> 0 </p>
+              <p data-id="b2" style="background: Gray; line-height: 40px; position: absolute; border-radius: 4px;
+                                             top: 260.5px; left: 328.5px; padding-left: 10px; padding-right: 10px;"> 1 </p>
+              <p data-id="b3" style="background: Gray; line-height: 40px; position: absolute; border-radius: 4px;
+                                             top: 485.5px; left: 103.5px; padding-left: 10px; padding-right: 10px;"> 1 </p>
+              <p data-id="b4" style="background: Gray; line-height: 40px; position: absolute; border-radius: 4px;
+                                     top: 485.5px; left: 328.5px; padding-left: 10px; padding-right: 10px;"> 0 </p>
+
+              <!-- Rank labels -->
+              <div data-id="ax1" style="background: #D8E7F5;
+                                        position: absolute; top: 259.175px; left: 55%; width: 40%; height: 292.5px; border-radius: 4px"></div>
+
+              <div data-id="ax1" style="background: black;
+                                        position: absolute; top: 446.5px; left: 65%; width: 26%; height: 4px;"></div>
+              
+              <div data-id="axbot" style="background: Gray;
+                                          position: absolute; top: 406.5px; left: 65%; width: 26%; height: 1.5px; opacity:0.5; "></div>
+              
+              <div data-id="axmid" style="background: Gray;
+                                          position: absolute; top: 366.5px; left: 65%; width: 26%; height: 1.5px; opacity:0.5; "></div>
+
+              <div data-id="axtop" style="background: Gray;
+                                          position: absolute; top: 326.5px; left: 65%; width: 26%; height: 1.5px; opacity:0.5; "></div>
+              
+              <p data-id="ylabel" style="background: none; line-height: 40px; position: absolute; color: black;
+                                         top: 280.5px; left: 55.5%; writing-mode: vertical-rl; text-align: center"> Compute <br> work </p>
+
+              <p data-id="xlabel" style="background: none; line-height: 40px; position: absolute; border-radius: 4px; color: black;
+                                         top: 485.0px; left: 73.3%; padding-left: 10px; padding-right: 10px;"> Rank </p>
+              <p data-id="bc1" style="background: Gray; line-height: 40px; position: absolute; border-radius: 4px;
+                                      top: 440.5px; left: 70.9%; padding-left: 10px; padding-right: 10px;"> 0 </p>
+              <p data-id="bc2" style="background: Gray; line-height: 40px; position: absolute; border-radius: 4px;
+                                      top: 440.5px; left: 81.3%; padding-left: 10px; padding-right: 10px;"> 1 </p>
+              <p data-id="bc3" style="background: Gray; line-height: 40px; position: absolute; border-radius: 4px;
+                                      top: 440.5px; left: 81.3%; padding-left: 10px; padding-right: 10px;"> 1 </p>
+              <p data-id="bc4" style="background: Gray; line-height: 40px; position: absolute; border-radius: 4px;
+                                      top: 440.5px; left: 70.9%; padding-left: 10px; padding-right: 10px;"> 0 </p>
+
+              <!-- <div data-id="bar1" style="background: #F16335; position: absolute; -->
+              <!--                          top: 366.0px; left: 70.2%; height: 80px; width: 50px;"> </div> -->
+              <div data-id="pc1" style="background: #F16335; position: absolute;
+                                        top: 366.0px; left: 70.2%; height: 20.0px; width: 50px;"> </div>
+              <div data-id="pc2" style="background: #F16335; position: absolute;
+                                        top: 386px; left: 70.2%; height: 20.0px; width: 50px;"> </div>
+              <div data-id="pc7" style="background: #F16335; position: absolute;
+                                        top: 406px; left: 70.2%; height: 20.0px; width: 50px;"> </div>
+              <div data-id="pc8" style="background: #F16335; position: absolute;
+                                        top: 426px; left: 70.2%; height: 20.0px; width: 50px;"> </div>
+              <!-- <div data-id="c1" style="background: #F16335; position: absolute; -->
+              <!--                          top: 414.0px; left: 70.2%; height: 13.3px; width: 50px;"> </div> -->
+              <!-- <div data-id="c4" style="background: #F16335; position: absolute; -->
+              <!--                          top: 432.0px; left: 70.2%; height: 13.3px; width: 50px;"> </div> -->
+              
+              <!-- <div data-id="bar2" style="background: #F16335; position: absolute; -->
+              <!--                            top: 366.0px; left: 80.6%; height: 80px; width: 50px;"> </div> -->
+              <div data-id="pc3" style="background: #F16335; position: absolute;
+                                        top: 366.0px; left: 80.6%; height: 20.0px; width: 50px;"> </div>
+              <div data-id="pc4" style="background: #F16335; position: absolute;
+                                        top: 386px; left: 80.6%; height: 20.0px; width: 50px;"> </div>
+              <div data-id="pc5" style="background: #F16335; position: absolute;
+                                        top: 406px; left: 80.6%; height: 20.0px; width: 50px;"> </div>
+              <div data-id="pc6" style="background: #F16335; position: absolute;
+                                        top: 426px; left: 80.6%; height: 20.0px; width: 50px;"> </div>
+            </section>
+                                    
+            <section data-auto-animate data-auto-animate-unmatched="fade" data-transition-speed="slow">
+			  <h2> Particle-mesh simulations can suffer from load imbalance. </h2>
+              <div data-id="1" style="background: CornSilk; border: 8px solid Gray; border-radius:10px;
+                                      position: absolute; top: 175px; left: 0px; width: 450px; height: 450px;"></div>
+              
+              <!-- Grid -->
+              <div data-id="h1" style="border:none; border-top:4px dashed Gray;
+                                       position: absolute; top: 295.5px; left: 8px; width: 450px; height: 5px;"></div>
+              <div data-id="h2" style="border:none; border-top:4px dashed Gray;
+                                       position: absolute; top: 408px; left: 8px; width: 450px; height: 5px;"></div>
+              <div data-id="h3" style="border:none; border-top:4px dashed Gray;
+                                       position: absolute; top: 520.5px; left: 8px; width: 450px; height: 5px;"></div>
+              
+              <div data-id="v1" style="border:none; border-left:4px dashed Gray;
+                                       position: absolute; top: 183px; left: 120.5px; width: 5px; height: 450px;"></div>
+              <div data-id="v2" style="border:none; border-left:4px dashed Gray;
+                                       position: absolute; top: 183px; left: 233px; width: 5px; height: 450px;"></div>
+              <div data-id="v3" style="border:none; border-left:4px dashed Gray;
+                                       position: absolute; top: 183px; left: 345.5px; width: 5px; height: 450px;"></div>
+
+              <!-- Particles -->
+              <div data-id="p1" style="background: RoyalBlue; position: absolute; top: 253px; left: 50px;
+                                       width: 35px; height: 35px; margin: -17.5px 0 0 -17.5px; border-radius: 35px;"></div>
+              <div data-id="p2" style="background: RoyalBlue; position: absolute; top: 343px; left: 200px;
+                                       width: 35px; height: 35px; margin: -17.5px 0 0 -17.5px; border-radius: 35px;"></div>
+
+              <!-- Move to the left -->
+              <div data-id="p3" style="background: RoyalBlue; position: absolute; top: 307px; left: 210px;
+                                       width: 35px; height: 35px; margin: -17.5px 0 0 -17.5px; border-radius: 35px;"></div>
+              <div data-id="p4" style="background: RoyalBlue; position: absolute; top: 265px; left: 415px;
+                                       width: 35px; height: 35px; margin: -17.5px 0 0 -17.5px; border-radius: 35px;"></div>
+
+              <div data-id="p5" style="background: RoyalBlue; position: absolute; top: 584px; left: 93px;
+                                       width: 35px; height: 35px; margin: -17.5px 0 0 -17.5px; border-radius: 35px;"></div>
+              <!-- Move up -->
+              <div data-id="p6" style="background: RoyalBlue; position: absolute; top: 385px; left: 157px;
+                                       width: 35px; height: 35px; margin: -17.5px 0 0 -17.5px; border-radius: 35px;"></div>
+              
+              <div data-id="p7" style="background: RoyalBlue; position: absolute; top: 536px; left: 286px;
+                                       width: 35px; height: 35px; margin: -17.5px 0 0 -17.5px; border-radius: 35px;"></div>
+              <div data-id="p8" style="background: RoyalBlue; position: absolute; top: 523px; left: 385px;
+                                       width: 35px; height: 35px; margin: -17.5px 0 0 -17.5px; border-radius: 35px;"></div>
+
+              <!-- Rank delineation -->
+              <div data-id="H2" style="border:none; border-top:8px solid Gray;
+                                       position: absolute; top: 408px; left: 8px; width: 450px; height: 5px;"></div>
+              <div data-id="V2" style="border:none; border-left:8px solid Gray;
+                                       position: absolute; top: 183px; left: 233px; width: 5px; height: 450px;"></div>
+
+              <p data-id="b1" style="background: IndianRed; line-height: 40px; position: absolute; border-radius: 4px;
+                                             top: 260.5px; left: 103.5px; padding-left: 10px; padding-right: 10px;"> 0 </p>
+              <p data-id="b2" style="background: Gray; line-height: 40px; position: absolute; border-radius: 4px;
+                                             top: 260.5px; left: 328.5px; padding-left: 10px; padding-right: 10px;"> 1 </p>
+              <p data-id="b3" style="background: Gray; line-height: 40px; position: absolute; border-radius: 4px;
+                                             top: 485.5px; left: 103.5px; padding-left: 10px; padding-right: 10px;"> 1 </p>
+              <p data-id="b4" style="background: Gray; line-height: 40px; position: absolute; border-radius: 4px;
+                                     top: 485.5px; left: 328.5px; padding-left: 10px; padding-right: 10px;"> 0 </p>
+
+              <!-- Rank labels -->
+              <div data-id="ax1" style="background: #D8E7F5;
+                                        position: absolute; top: 259.175px; left: 55%; width: 40%; height: 292.5px; border-radius: 4px"></div>
+
+              <div data-id="ax1" style="background: black;
+                                        position: absolute; top: 446.5px; left: 65%; width: 26%; height: 4px;"></div>
+              
+              <div data-id="axbot" style="background: Gray;
+                                          position: absolute; top: 406.5px; left: 65%; width: 26%; height: 1.5px; opacity:0.5; "></div>
+              
+              <div data-id="axmid" style="background: Gray;
+                                          position: absolute; top: 366.5px; left: 65%; width: 26%; height: 1.5px; opacity:0.5; "></div>
+
+              <div data-id="axtop" style="background: Gray;
+                                          position: absolute; top: 326.5px; left: 65%; width: 26%; height: 1.5px; opacity:0.5; "></div>
+              
+              <p data-id="ylabel" style="background: none; line-height: 40px; position: absolute; color: black;
+                                         top: 280.5px; left: 55.5%; writing-mode: vertical-rl; text-align: center"> Compute <br> work </p>
+
+              <p data-id="xlabel" style="background: none; line-height: 40px; position: absolute; border-radius: 4px; color: black;
+                                         top: 485.0px; left: 73.3%; padding-left: 10px; padding-right: 10px;"> Rank </p>
+              <p data-id="bc1" style="background: Gray; line-height: 40px; position: absolute; border-radius: 4px;
+                                      top: 440.5px; left: 70.9%; padding-left: 10px; padding-right: 10px;"> 0 </p>
+              <p data-id="bc2" style="background: Gray; line-height: 40px; position: absolute; border-radius: 4px;
+                                      top: 440.5px; left: 81.3%; padding-left: 10px; padding-right: 10px;"> 1 </p>
+              <p data-id="bc3" style="background: Gray; line-height: 40px; position: absolute; border-radius: 4px;
+                                      top: 440.5px; left: 81.3%; padding-left: 10px; padding-right: 10px;"> 1 </p>
+              <p data-id="bc4" style="background: Gray; line-height: 40px; position: absolute; border-radius: 4px;
+                                      top: 440.5px; left: 70.9%; padding-left: 10px; padding-right: 10px;"> 0 </p>
+
+              <div data-id="pc1" style="background: #F16335; position: absolute;
+                                        top: 326.0px; left: 70.2%; height: 20.0px; width: 50px;"> </div>
+              <div data-id="pc2" style="background: #F16335; position: absolute;
+                                        top: 346px; left: 70.2%; height: 20.0px; width: 50px;"> </div>
+              <div data-id="pc7" style="background: #F16335; position: absolute;
+                                        top: 346px; left: 70.2%; height: 60.0px; width: 50px;"> </div>
+              <div data-id="pc8" style="background: #F16335; position: absolute;
+                                        top: 406px; left: 70.2%; height: 40.0px; width: 50px;"> </div>
+              
+              <div data-id="pc3" style="background: #F16335; position: absolute;
+                                        top: 406.0px; left: 80.6%; height: 20.0px; width: 50px;"> </div>
+              <div data-id="pc4" style="background: #F16335; position: absolute;
+                                        top: 406px; left: 80.6%; height: 20.0px; width: 50px;"> </div>
+              <div data-id="pc5" style="background: #F16335; position: absolute;
+                                        top: 406px; left: 80.6%; height: 20.0px; width: 50px;"> </div>
+              <div data-id="pc6" style="background: #F16335; position: absolute;
+                                        top: 426px; left: 80.6%; height: 20.0px; width: 50px;"> </div>
+			</section>
+            
+            <section data-auto-animate data-auto-animate-unmatched="fade" data-transition-speed="slow">
+			  <h2> Particle-mesh simulations can suffer from load imbalance. </h2>
+              <div data-id="1" style="background: CornSilk; border: 8px solid Gray; border-radius:10px;
+                                      position: absolute; top: 175px; left: 0px; width: 450px; height: 450px;"></div>
+              
+              <!-- Grid -->
+              <div data-id="h1" style="border:none; border-top:4px dashed Gray;
+                                       position: absolute; top: 295.5px; left: 8px; width: 450px; height: 5px;"></div>
+              <div data-id="h2" style="border:none; border-top:4px dashed Gray;
+                                       position: absolute; top: 408px; left: 8px; width: 450px; height: 5px;"></div>
+              <div data-id="h3" style="border:none; border-top:4px dashed Gray;
+                                       position: absolute; top: 520.5px; left: 8px; width: 450px; height: 5px;"></div>
+              
+              <div data-id="v1" style="border:none; border-left:4px dashed Gray;
+                                       position: absolute; top: 183px; left: 120.5px; width: 5px; height: 450px;"></div>
+              <div data-id="v2" style="border:none; border-left:4px dashed Gray;
+                                       position: absolute; top: 183px; left: 233px; width: 5px; height: 450px;"></div>
+              <div data-id="v3" style="border:none; border-left:4px dashed Gray;
+                                       position: absolute; top: 183px; left: 345.5px; width: 5px; height: 450px;"></div>
+
+              <!-- Particles -->
+              <div data-id="p1" style="background: RoyalBlue; position: absolute; top: 253px; left: 50px;
+                                       width: 35px; height: 35px; margin: -17.5px 0 0 -17.5px; border-radius: 35px;"></div>
+              <div data-id="p2" style="background: RoyalBlue; position: absolute; top: 343px; left: 200px;
+                                       width: 35px; height: 35px; margin: -17.5px 0 0 -17.5px; border-radius: 35px;"></div>
+
+              <!-- Move to the left -->
+              <div data-id="p3" style="background: RoyalBlue; position: absolute; top: 307px; left: 210px;
+                                       width: 35px; height: 35px; margin: -17.5px 0 0 -17.5px; border-radius: 35px;"></div>
+              <div data-id="p4" style="background: RoyalBlue; position: absolute; top: 265px; left: 415px;
+                                       width: 35px; height: 35px; margin: -17.5px 0 0 -17.5px; border-radius: 35px;"></div>
+
+              <div data-id="p5" style="background: RoyalBlue; position: absolute; top: 584px; left: 93px;
+                                       width: 35px; height: 35px; margin: -17.5px 0 0 -17.5px; border-radius: 35px;"></div>
+              <!-- Move up -->
+              <div data-id="p6" style="background: RoyalBlue; position: absolute; top: 385px; left: 157px;
+                                       width: 35px; height: 35px; margin: -17.5px 0 0 -17.5px; border-radius: 35px;"></div>
+              
+              <div data-id="p7" style="background: RoyalBlue; position: absolute; top: 536px; left: 286px;
+                                       width: 35px; height: 35px; margin: -17.5px 0 0 -17.5px; border-radius: 35px;"></div>
+              <div data-id="p8" style="background: RoyalBlue; position: absolute; top: 523px; left: 385px;
+                                       width: 35px; height: 35px; margin: -17.5px 0 0 -17.5px; border-radius: 35px;"></div>
+
+              <!-- Rank delineation -->
+              <div data-id="H2" style="border:none; border-top:8px solid Gray;
+                                       position: absolute; top: 408px; left: 8px; width: 450px; height: 5px;"></div>
+              <div data-id="V2" style="border:none; border-left:8px solid Gray;
+                                       position: absolute; top: 183px; left: 233px; width: 5px; height: 450px;"></div>
+
+              <p data-id="b1" style="background: Gray; line-height: 40px; position: absolute; border-radius: 4px;
+                                             top: 260.5px; left: 103.5px; padding-left: 10px; padding-right: 10px;"> 0 </p>
+              <p data-id="b2" style="background: Gray; line-height: 40px; position: absolute; border-radius: 4px;
+                                             top: 260.5px; left: 328.5px; padding-left: 10px; padding-right: 10px;"> 1 </p>
+              <p data-id="b3" style="background: Gray; line-height: 40px; position: absolute; border-radius: 4px;
+                                             top: 485.5px; left: 103.5px; padding-left: 10px; padding-right: 10px;"> 1 </p>
+              <p data-id="b4" style="background: LimeGreen; line-height: 40px; position: absolute; border-radius: 4px;
+                                     top: 485.5px; left: 328.5px; padding-left: 10px; padding-right: 10px;"> 1 </p>
+
+              <!-- Rank labels -->
+              <div data-id="ax1" style="background: #D8E7F5;
+                                        position: absolute; top: 259.175px; left: 55%; width: 40%; height: 292.5px; border-radius: 4px"></div>
+
+              <div data-id="ax1" style="background: black;
+                                        position: absolute; top: 446.5px; left: 65%; width: 26%; height: 4px;"></div>
+              
+              <div data-id="axbot" style="background: Gray;
+                                          position: absolute; top: 406.5px; left: 65%; width: 26%; height: 1.5px; opacity:0.5; "></div>
+              
+              <div data-id="axmid" style="background: Gray;
+                                          position: absolute; top: 366.5px; left: 65%; width: 26%; height: 1.5px; opacity:0.5; "></div>
+
+              <div data-id="axtop" style="background: Gray;
+                                          position: absolute; top: 326.5px; left: 65%; width: 26%; height: 1.5px; opacity:0.5; "></div>
+              
+              <p data-id="ylabel" style="background: none; line-height: 40px; position: absolute; color: black;
+                                         top: 280.5px; left: 55.5%; writing-mode: vertical-rl; text-align: center"> Compute <br> work </p>
+
+              <p data-id="xlabel" style="background: none; line-height: 40px; position: absolute; border-radius: 4px; color: black;
+                                         top: 485.0px; left: 73.3%; padding-left: 10px; padding-right: 10px;"> Rank </p>
+              <p data-id="bc1" style="background: Gray; line-height: 40px; position: absolute; border-radius: 4px;
+                                      top: 440.5px; left: 70.9%; padding-left: 10px; padding-right: 10px;"> 0 </p>
+              <p data-id="bc2" style="background: Gray; line-height: 40px; position: absolute; border-radius: 4px;
+                                      top: 440.5px; left: 81.3%; padding-left: 10px; padding-right: 10px;"> 1 </p>
+              <p data-id="bc3" style="background: Gray; line-height: 40px; position: absolute; border-radius: 4px;
+                                      top: 440.5px; left: 81.3%; padding-left: 10px; padding-right: 10px;"> 1 </p>
+              <p data-id="bc4" style="background: Gray; line-height: 40px; position: absolute; border-radius: 4px;
+                                      top: 440.5px; left: 70.9%; padding-left: 10px; padding-right: 10px;"> 0 </p>
+
+              <div data-id="pc1" style="background: #F16335; position: absolute;
+                                        top: 366.0px; left: 70.2%; height: 20.0px; width: 50px;"> </div>
+              <div data-id="pc2" style="background: #F16335; position: absolute;
+                                        top: 386px; left: 70.2%; height: 20.0px; width: 50px;"> </div>
+              <div data-id="pc7" style="background: #F16335; position: absolute;
+                                        top: 406px; left: 70.2%; height: 20.0px; width: 50px;"> </div>
+              <div data-id="pc8" style="background: #F16335; position: absolute;
+                                        top: 426px; left: 70.2%; height: 20.0px; width: 50px;"> </div>
+              
+              <div data-id="pc3" style="background: #F16335; position: absolute;
+                                        top: 366.0px; left: 80.6%; height: 20.0px; width: 50px;"> </div>
+              <div data-id="pc4" style="background: #F16335; position: absolute;
+                                        top: 386px; left: 80.6%; height: 20.0px; width: 50px;"> </div>
+              <div data-id="pc5" style="background: #F16335; position: absolute;
+                                        top: 406px; left: 80.6%; height: 20.0px; width: 50px;"> </div>
+              <div data-id="pc6" style="background: #F16335; position: absolute;
+                                        top: 426px; left: 80.6%; height: 20.0px; width: 50px;"> </div>
+            </section>
+
+            <section data-auto-animate data-auto-animate-unmatched="fade" data-transition-speed="fast">
+			  <h2> Load imbalance can be corrected at run time. </h2>
+              <p> Basic load balance algorithm for distributed memory particle-mesh: </p>
+              <pre data-id="code"><code data-line-numbers class="hljs" data-trim>
+              if (step % loadBalanceInterval == 0) {
+                  float currEff = 0.0, propEff = 0.0;
+                  DistMapping newDM = makeNewDM(costs,
+                                                currEff, propEff);
+                  bool globUpdateDM = false;
+                  if (myRank == root) {
+                      globUpdateDM = (propEff > 1.1*currEff);
+                  }
+                  bcast(&globUpdateDM, 1, root);
+                  if (globUpdateDM) {
+                      bcast(&newDM[0], newDM.size(), root);
+                      updateDistributionMapping(newDM);
+                  }
+              }
+              </code></pre>
+			</section>
+
+            <section data-auto-animate data-auto-animate-unmatched="fade">
+			  <h2> How should <i> costs </i> be measured when running on a GPU-accelerated machine? </h2>
+              <ol style="position: absolute; width: 30%; height: 25%; top: 40%; left: 30%; margin: auto;
+                  text-align:left; display:inline-block;border-radius:10px;padding: 10px 0px 10px 65px;
+                  border: 4px solid RoyalBlue;">
+                <li> Start timer   </li>
+                <li> Launch kernel </li>
+                <li> Stop timer    </li>
+			  </ol>
+			</section>
+            
+            <section data-auto-animate data-auto-animate-unmatched="fade">
+              <h2> How should <i> costs </i> be measured when running on a GPU-accelerated machine? </h2>
+              <div style="position: absolute; float: center; top: 28%">
+				<img src="figs/launchTime2.png" style="margin: 0 0 0 0; border: 4px solid RoyalBlue;border-radius:10px;">
+			  </div>
+              <ol style="position: absolute; width: 15%; height: 7%; top: 33%; left: 75%; margin: auto;
+                  text-align:left; display:inline-block; border-radius:10px;padding: 10px 0px 10px 30px;
+                  border: 4px solid RoyalBlue; color: black; line-height: 0.8em; font-size: 22px">
+                <li> Start timer   </li>
+                <li> Launch kernel </li>
+                <li> Stop timer    </li>
+			  </ol>
+              <div style="position: absolute; top: 85%; width: 100%">
+                <p class="fragment" style="text-align: center"> Not like this! CPU and GPU are asynchronous. </p>
+              </div>
+			</section>
+            
+            <section data-auto-animate data-auto-animate-unmatched="fade">
+			  <h2> These are a few strategies appropriate for cost assessment on GPU machines: </h2>
+              <ul style="position: absolute; width: 100%; height: 100%; top: 65%; bottom: 0; right: 0; left: 0; margin: auto;">
+                <li> <i>Heuristic</i>: number of particles and cells as proxy for compute work            </li>
+                <li class="fragment" > <i>CUPTI</i>: use <i> CUDA Profiling Tools Interface</i> to access kernel times      </li>
+                <li class="fragment" > <i>GPU clock</i>: use thread-summed kernel times as relative measure of compute work </li>
+			  </ul>
+			</section>
+
+            <section data-auto-animate data-auto-animate-unmatched="fade">
+			  <h2> How to measure costs with <i>heuristic</i>? </h2>
+              <p> Cost for rank $i$ is linear combination of number of particles and cells: </p>
+              <p style="border: 4px solid RoyalBlue; text-align:center; display:inline-block;border-radius:10px;padding: 5px 5px 5px 5px;">
+				\[\begin{aligned}
+                c_{i} = \alpha \cdot n_{\rm particles} + \beta \cdot n_{\rm cells}
+				\end{aligned} \]
+			  </p>
+              <ul style="position: absolute; width: 100%; height: 100%; top: 100%; bottom: 0; right: 0; left: 0; margin: auto;">
+                <li> $\alpha$ and $\beta$ are parameters representing relative computational cost of single particle vs. single cell </li>
+                <li> $\alpha$ and $\beta$ change depending on algorithm, hardware </li>
+                <li> In general, $\alpha$ and $\beta$ should be measured                                          </li>
+                <li class="fragment"> <span style="color: LimeGreen">Pros</span>: vendor agnostic, low overhead   </li>
+                <li class="fragment"> <span style="color: IndianRed">Cons</span>: cumbersome tuning of parameters </li>
+			  </ul>
+              
+			</section>
+            
+            <section data-auto-animate data-auto-animate-unmatched="fade">
+			  <h2> How to measure costs with <i>CUPTI</i>? </h2>
+              <div>
+                <p> <i> CUDA Profiling Tools Interface (CUPTI)</i>: <a href="https://docs.nvidia.com/cuda/cupti/index.html"> docs.nvidia.com/cuda/cupti</a>
+                  <br>GPU activity triggers callback functions to return CUPTI buffers </p>
+              </div>
+              <div style="position: absolute; float: center; top: 28%">
+				<img src="figs/KernelTimingCUPTI.png" style="margin: 0 0 0 0; border: 4px solid RoyalBlue;border-radius:10px;">
+			  </div>
+              <ul style="position: absolute; width: 100%; height: 100%; top: 175%; bottom: 0; right: 0; left: 0; margin: auto;">
+                <li class="fragment"> <span style="color: LimeGreen">Pros</span>: API enables powerful profiling capabilities   </li>
+                <li class="fragment"> <span style="color: IndianRed">Cons</span>: overhead, vendor specific </li>
+			  </ul>
+			</section>
+            
+            <section data-auto-animate data-auto-animate-unmatched="fade">
+			  <h2> How to measure costs with <i>CUPTI</i>? </h2>
+              <p> Initialize the trace: </p>
+              <pre data-id="code1"><code data-line-numbers class="c" data-trim>
+                  cuptiActivityEnable(CUPTI_ACTIVITY_KIND_CONCURRENT_KERNEL);
+                  cuptiActivityRegisterCallbacks(bfrRequest, bfrCompleted);
+              </code></pre>
+              <p> Trigger callback functions: </p>
+              <pre data-id="code2"><code data-line-numbers class="hljs" data-trim>
+                  void CUPTI API bfrRequest (uint8_t **bfr, ...)
+                  {
+                      // Signal to CUPTI client that an empty buffer
+                      // is needed by CUPTI
+                  }
+                  void CUPTI API bfrCompleted (uint8_t *bfr, ...)
+                  {
+                      // Return a buffer of completed activity records
+                      // to CUPTI client  
+                  }
+              </code></pre>
+			</section>
+
+            <section data-auto-animate data-auto-animate-unmatched="fade">
+			  <h2> How to measure costs with <i>CUPTI</i>? </h2>
+              <p> Initialize the trace: </p>
+              <pre data-id="code1"><code data-line-numbers class="c" data-trim>
+                  cuptiActivityEnable(CUPTI_ACTIVITY_KIND_CONCURRENT_KERNEL);
+                  cuptiActivityRegisterCallbacks(bfrRequest, bfrCompleted);
+              </code></pre>
+              <p> Trigger callback functions: </p>
+              <pre data-id="code2"><code data-line-numbers class="c" data-trim>
+                  void CUPTI API bfrRequest (uint8_t **bfr, ...)
+                  {...}
+                  void CUPTI API bfrCompleted (uint8_t *bfr, ...)
+                  {...}
+                  
+                  ⋮
+                  
+                  mykernel<<<...>>>(...);
+                  cuptiActivityFlushAll(0); // Wait for return of CUPTI 
+                  ➞ bfrCompleted(...);     // records via callback function
+              </code></pre>
+			</section>
+            
+            <section data-auto-animate data-auto-animate-unmatched="fade">
+			  <h2> How to measure costs with <i>GPU clock</i>? </h2>
+              <div>
+                <p> Estimate relative compute work from thread-summed kernel time  </p>
+              </div>
+              <div style="position: absolute; float: center; top: 22%">
+				<img src="figs/KernelTimingGPUClock.png" style="margin: 0 0 0 0; border: 4px solid RoyalBlue;border-radius:10px;">
+			  </div>
+              <ul style="position: absolute; width: 100%; height: 100%; top: 168%; bottom: 0; right: 0; left: 0; margin: auto;">
+                <li class="fragment"> <span style="color: LimeGreen">Pros</span>: vendor agnostic, no hyperparameter tuning </li>
+                <li class="fragment"> <span style="color: IndianRed">Cons</span>: requires some data movement </li>
+			  </ul>
+			</section>
+            
+            <section data-auto-animate data-auto-animate-unmatched="fade">
+			  <h2> How to measure costs with <i>GPU clock</i>? </h2>
+              <p> Add the thread cycles, using <code>atomicAdd</code> for thread safety: </p>
+              <pre><code data-line-numbers class="c" data-trim>
+                  __global__ void mykernel (...) {
+                      float cycles = clock();
+                      ⋮
+                      // thread work
+                      ⋮
+                      cycles = clock() - cycles;
+
+                      // cost_ptr is the pointer to rank's cost
+                      atomicAdd(cost_ptr, cycles);
+                  }
+              </code></pre>
+              <ul style="position: absolute; width: 100%; height: 100%; top: 135%; bottom: 0; right: 0; left: 0; margin: auto;">
+                <li> Reduced overhead using <span style="color: LimeGreen">pinned host memory</span> </li>
+                <li class="fragment"> To use this: instrument most expensive kernels </li>
+                <li class="fragment"> Overcomes weakness of heuristic: that has no sensitivity to how much particles move </li>
+			  </ul>
+			</section>
+
+            <section data-auto-animate data-auto-animate-unmatched="fade" data-transition-speed="fast">
+			  <h2> Outline: </h2>
+              <ol style="position: absolute; width: 100%; height: 25%; top: 4%; bottom: 0; right: 0; left: 23%; margin: auto;">
+                <li> Load balancing intro  </li>
+                <li> <span style="color:LimeGreen">  Dynamic load balancing in <br>PIC code run on GPUs </span> </li>
+			  </ol>
+			</section>
+                        
+            <section data-auto-animate data-auto-animate-unmatched="fade">
+			  <h2> We studied these strategies in the particle-in-cell code WarpX.</h2>
+              <div style="width: 50%">
+              <div class="container">
+				<video style="position: absolute; left: 49%; top: 22%; width: 50%;  margin: 0 0 0 0; border: 4px solid RoyalBlue; border-radius:10px;"
+				       id="warpx"
+				       style="transform: translate(0%, 10%)"
+				       data-autoplay src="figs/warpx.mp4"
+				       loop controls>
+				</video>
+                <p style="background: RoyalBlue; line-height: 20px;
+                   position: absolute; border-radius: 4px;
+                   top: 60.5%; width: 48%; padding-left: 0px; padding-right: 0px;
+                   padding-top: 20px; padding-bottom: 15px;
+                   text-align: center"> WarpX  <span style="font-size: 24px"> <br> advanced physics </span> </p>
+                <p style="background: ForestGreen; line-height: 20px;
+                   position: absolute; border-radius: 4px;
+                   top: 73.4%; width: 48%; padding-left: 0px; padding-right: 0px;
+                   padding-top: 20px; padding-bottom: 15px;
+                   text-align: center"> AMReX  <span style="font-size: 24px"> <br> mesh infrastructure, algorithms </span> </p>
+                <p style="background: Gray; line-height: 20px;
+                   position: absolute; border-radius: 4px;
+                   top: 86.3%; width: 23.8%; padding-left: 0px; padding-right: 0px;
+                   padding-top: 10px; padding-bottom: 10px;
+                   text-align: center; font-size: 18px">  MPI </p>
+                <p style="background: Gray; line-height: 20px;
+                   position: absolute; border-radius: 4px;
+                   top: 86.3%; left: 24.2%; width: 23.8%; padding-left: 0px; padding-right: 0px;
+                   padding-top: 10px; padding-bottom: 10px;
+                   text-align: center; font-size: 18px"> CUDA, OpenMP, DPC++, HIP </p>
+
+                <p style="margin-left: 40px; margin-top: 40px; margin-bottom: 0px;"> WarpX: advanced PIC code </p>
+                <ul style="font-size:20px;"> <li style="margin:0 0 0 0"> <a href="https://github.com/ECP-WarpX/WarpX"> github.com/ECP-WarpX/WarpX </a> </li> </ul>
+                <p style="margin-left: 40px; margin-bottom: 0px;"> AMReX: mesh framework </p>
+                <ul style="font-size:20px;"> <li style="margin:0 0 0 0"> <a href="https://github.com/AMReX-Codes/amrex"> github.com/AMReX-Codes/amrex </a></li> </ul>
+
+                <p style="font-size:20px; position: absolute; left: 77%; top: 97%; width: 50%; margin: 0 0 0 0;"> Courtesy of Max Thevenet </p>
+                
+			  </div>
+			</section>
+                
+            <section data-auto-animate data-auto-animate-unmatched="fade">
+			  <h2> We choose <i> laser-ion acceleration</i> as a challenging test problem. </h2>
+              <div style="position: absolute; top: 23%;">
+                <p style=""> Rapid changes in particle, field spatial profiles $\rightarrow$ challenge problem </p>
+                <p style=""> Numerical experiments: 6–6144 Nvidia V100 GPUs on OLCF Summit </p>
+              </div>
+              <div style="position: absolute; top: 50%; left: 0%; width=100%;">
+                <img style="margin: 0 0 0 0; border: 4px solid RoyalBlue; border-radius:10px;" src="figs/laserion_b.png">
+			  </div>
+              <div style="position: absolute; top: 50%; left: 0%; width=100%;">
+                <img style="margin: 0 0 0 0; border: 4px solid RoyalBlue; border-radius:10px;" src="figs/laserion_c.png">
+			  </div>
+			  <div style="position: absolute; top: 50%; left: 0%; width=100%;">
+                <img style="margin: 0 0 0 0; border: 4px solid RoyalBlue; border-radius:10px;" src="figs/laserion_d.png">
+			  </div>
+              <div style="position: absolute; top: 48.5%; left: 0%; width=100%;">
+                <img src="figs/laserion_a.png">
+			  </div>
+            </section>
+
+            <section data-auto-animate data-auto-animate-unmatched="fade" data-transition-speed="slow">
+			  <h2> The inhomogeneity translates to different computational costs. </h2>
+              <img style="position: absolute; top: 71.8%; width: 65%; left: 17.5%;" src="figs/laserion_d.png">
+              <img style="position: absolute; top: 54.46%; width: 65%; left: 17.5%;" src="figs/laserion_c.png">
+              <img style="position: absolute; top: 37.13%; width: 65%; left: 17.5%;" src="figs/laserion_b.png">
+              <img style="position: absolute; top: 19.8%; width: 65%; left: 17.5%;" src="figs/laserion_a.png">
+              
+              <div style="w100">
+                <img data-transition-speed="slow" width=65% style="margin: 0 0 0 0; border: 4px solid RoyalBlue; border-radius:10px;" src="figs/laserion.png">
+			  </div>
+			</section>
+
+            <section data-auto-animate data-auto-animate-unmatched="fade">
+			  <h2> Computational costs are used to compute optimal mapping from MPI rank to domain. </h2>
+              <div class="ctr w100">
+                <p style="line-height: 1.2em;"> 
+                  <i>Knapsack</i>: distribute costs to ranks as equally as possible
+                  <br><i>Space-filling curve (SFC)</i>: enumerate ranks along curve and partition</p>
+              </div>
+			  <div style="position: absolute; top: 37%; left: 5%; width: 90%;">
+                <img style="margin: 0 0 0 0; border: 4px solid RoyalBlue; border-radius:10px;" src="figs/dm.png">
+			  </div>
+			</section>
+
+            <section data-auto-animate data-auto-animate-unmatched="fade">
+			  <h2> Dynamic load balancing is crucial to performance. </h2>
+              <div style="position: absolute; top: 26%; float: left; text-align: center; width: 35%;">
+                <p style = "text-align: center;"> Static load balancing <br>is not enough! </p>
+                <p style = "text-align: center;"> Efficiency: average cost/mean cost </p>
+				<p style="border: 4px solid RoyalBlue; text-align:center; display:inline-block; border-radius:10px; padding: 3px 3px 3px 3px;">
+				  \[\begin{aligned}
+                  E \equiv c_{\rm avg}/c_{\rm max}
+				  \end{aligned} \]
+				</p>
+			  </div>
+			  <div style="float: right;" class="w60">
+				<img style="position: absolute; top: 25%; width: 60%; left: 38%; border: 4px solid RoyalBlue; border-radius:10px;" src="figs/lbeff.png">
+			  </div>
+			</section>
+
+            
+
+
+              <section data-auto-animate data-auto-animate-unmatched="fade">
+                
+				<h2> With optimal selection of parameters, we achieve around 3x–4x speedup. </h2>
+                  <div style="position: absolute; top: 24%; float: left; text-align: center; width: 50%;">
+                    <p style="font-size: 0.8em"> Optimal performance with:</p>
+                    <ul style="font-size: 0.8em; margin-left: 0.5em;">
+                      <li> GPU clock cost collection   </li>
+                      <li> Knapsack algorithm          </li>
+                      <li> 9 boxes per GPU             </li>
+                      <li> 10 steps to check rebalance </li>
+                      <li> 10% improvement threshold   </li>
+                    </ul>
+			      </div>
+			      <div style="float: right;" class="w45">
+				    <img style="position: absolute; top: 31%; width: 45%; left: 52%; border: 4px solid RoyalBlue; border-radius:10px;" src="figs/lbparams_b.png">
+			      </div>
+                  <div style="position: absolute; top: 68%; float: left; width: 50%;">
+                    <p class="fragment"  style="font-size: 0.8em; text-align: center"> <span style="color: ForestGreen">1.2x speedup over static lb </span>
+                      <br> <span class="fragment"  style="color: LimeGreen">  3.8x speedup over no lb </span></p>
+                  </div>
+			  </section>
+                
+
+			
+
+                <section data-auto-animate data-auto-animate-unmatched="fade">
+				  <h2> How much improvement expected from load balancing? </h2>
+                  <div style="position: absolute; top: 26%; float: left; text-align: center; width: 35%;">
+                    <p style = "text-align: center;"> Performance model w/ strong-scaling as input: </p>
+				    <p style="border: 4px solid RoyalBlue; text-align:center; display:inline-block; border-radius:10px; padding: 3px 3px 3px 3px; font-size:0.6em;" >
+				      \[\begin{aligned}
+                      S = \left(\frac{c_{\rm max0}}{c_{\rm avg0}}\right)^{x} = \left(\frac{1}{E_0}\right)^{x}
+				      \end{aligned} \]
+				    </p>
+                    <p style = "text-align: center;"> Estimate speedup $S$ as $\propto$ initial load imbalance </p>
+			      </div>
+			      <div style="float: right;" class="w60">
+				    <img style="position: absolute; top: 25%; width: 60%; left: 38%; border: 4px solid RoyalBlue; border-radius:10px;" src="figs/strongscaling.png">
+			      </div>
+
+				</section>
+
+                <section data-auto-animate data-auto-animate-unmatched="fade">
+				  <h2> The load balancing scheme achieves 62%–74% of theoretical maximum. </h2>
+                  <div class="ctr w75">
+                    <img style="margin: 0 0 0 0; border: 4px solid RoyalBlue; border-radius:10px;" src="figs/weakscaling.png">
+			      </div>
+                  <div class="fragment ctr100">
+                    <div style="background: LimeGreen; opacity: 0.4; position: absolute; top: 51.3%; left: 56.7%; width: 40px; height: 40px; border-radius: 20px;"></div>
+                    <div style="background: LimeGreen; opacity: 0.4; position: absolute; top: 46.9%; left: 67.4%; width: 40px; height: 40px; border-radius: 20px;"></div>
+                    <div style="background: LimeGreen; opacity: 0.4; position: absolute; top: 43.5%; left: 78.2%; width: 40px; height: 40px; border-radius: 20px;"></div>
+                    <p style="position: absolute; top: 93%; left: 13%; text-align: center"> 
+                      Avoid out-of-memory on GPUs with load balancing!
+                  </div>
+				</section>
+
+                <section data-auto-animate data-auto-animate-unmatched="fade">
+				  <h2> What is new/innovative about this work? </h2>
+                  <!-- <p> [Load balancing and PIC codes are well studied] </p> -->
+                  <!-- <p> [Mention related work] </p> -->
+                  <!-- <p> [Mention the GPU-specific innovations] </p> -->
+                  <!-- <div class="w100" style="position: absolute; top: 24%;"> -->
+                  <div class="w100">
+                  <ul style="font-size: 0.8em; margin-left: 0.5em;">
+                    <li style="margin: 30px 0";>
+                      Introduced GPU-applicable strategies for measuring relative computational costs of sub-domains of computational work
+                    </li>
+                    <li class="fragment" style="margin: 30px 0";>
+                      Implemented potentially vendor-neutral, in-situ, in-kernel cost measurement strategy based on GPU clock
+                    </li>
+                    <li class="fragment" style="margin: 30px 0";>
+                      Implemented Nvidia CUPTI cost measurement $\rightarrow$ overhead
+                    </li>
+                    <li class="fragment" style="margin: 30px 0";>
+                      Demonstrated effective GPU dynamic load balancing running challenging use case WarpX at scale (6-6144 GPUs) on Summit
+                    </li>
+                    <li class="fragment" style="margin: 30px 0";>
+                      Introduced strong-scaling based performance model
+                    </li>
+                  </ul>
+                  </div>
+				</section>
+
+                <section data-auto-animate data-auto-animate-unmatched="fade">
+				  <h2> With new strategies for GPU cost assessment, we achieved 3x–4x speedup on challenging plasma physics problem. </h2>
+                  <div class="w100" style="position: absolute; left: 5%">
+                    <p style="font-size:0.8em; margin: 0 0"> Work is open source: </p>
+                    <ul style="font-size:0.8em; margin: 0 0"> <li style="margin:0 0 0 0"> WarpX: <a href="https://github.com/ECP-WarpX/WarpX"> github.com/ECP-WarpX/WarpX </a> </li> </ul>
+                    <ul style="font-size:0.8em; margin: 0 0"> <li style="margin:0 0 0 0"> AMReX: <a href="https://github.com/AMReX-Codes/amrex"> github.com/AMReX-Codes/amrex </a></li> </ul>
+                  
+                    <p style="font-size:0.8em; margin: 0px 0"> Code, environment, tests all available at: </p>
+                    <ul style="font-size:0.8em; margin: 0 0"> <li style="margin:0 0 0 0"> <a href="https://zenodo.org/record/4708449#.YIEmmJNKhR0"> https://zenodo.org/record/4708449#.YIEmmJNKhR0 </a> </li> </ul>
+                    
+                    <p style="font-size:0.8em; margin: 0 0"> See preprint here: </p>
+                    <ul style="font-size:0.8em; margin: 0 0"> <li style="margin:0 0 0 0"> <a href="https://arxiv.org/abs/2104.11385"> https://arxiv.org/abs/2104.11385 </a></li> </ul>
+                    
+                    <p style="font-size:0.8em; margin: 0 0"> Personal github: </p>
+                    <ul style="font-size:0.8em; margin: 0 0"> <li style="margin:0 0 0 0"> <a href="https://github.com/mrowan137"> https://github.com/mrowan137 </a></li> </ul>
+				</section>
+
+                <section data-auto-animate data-auto-animate-unmatched="fade" data-background="figs/acknowledgments.png" data-background-size="contain">
+                  <div class="fragment">
+                    <div style="background: none; opacity: 1.0; position: absolute; top: 8.7%; left: 23.8%; width: 80px; height: 138px;
+                         border: 4px solid LimeGreen; border-radius:10px; margin: 0;"></div>
+                    <div style="background: none; opacity: 1.0; position: absolute; top: 31.0%; left: 23.8%; width: 80px; height: 147px;
+                         border: 4px solid LimeGreen; border-radius:10px; margin: 0;"></div>
+                  </div>
+				</section>
+
+                <section data-auto-animate data-auto-animate-unmatched="fade">
+				  <p style="position: absolute; top: 44%; left: 15%; width: 70% text-align: center;">
+                    Thank you! I am happy to
+                    answer any questions. </h3>
+				</section>
+
+
+                <section data-auto-animate data-auto-animate-unmatched="fade">
+                  <h2> Performance is tuned with additional algorithm-specific parameters. </h2>
+                  <div class="ctr w100">
+                    <p style="line-height: 1.2em;">
+                      <!-- <i style="color: #001C7F"> Heuristic, GPU clock, CUPTI </i>: cost collection method <br> -->
+                      <i style="color: #0027b3"> Heuristic, GPU clock, CUPTI </i>: cost collection method <br>
+                      <i style="color: #B2410B"> Knapsack, SFC </i>: algorithm to update distribution mapping <br>
+                      <i style="color: #12711C"> Boxes per GPU </i>: controls size of domain decomposition <br>
+                      <i style="color: #8C0300"> Load balance interval </i>: how often to try rebalancing <br>
+                      <i style="color: #5A1E72"> Improvement threshold </i>: required improvement to rebalance <br>
+                    </p>
+                  </div>
+			      <div style="position: absolute; top: 55%; left: 0%; width: 100%;">
+                    <img style="margin: 0 0 0 0; border: 4px solid RoyalBlue; border-radius:10px;" src="figs/lbparams_a.png">
+			      </div>
+			    </section>
+			</div>
+		</div>
+
+        <script src="../dist/reveal.js"></script>
+		<script src="../plugin/math/math.js"></script>
+		<script src="../plugin/highlight/highlight.js"></script>
+		<script>
+		  Reveal.initialize({
+		    center: true,
+		    hash: true,
+            math: {
+		      // mathjax: 'https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js',
+		      config: 'TeX-AMS_HTML-full',
+              TeX: {
+		        Macros: {
+		          R: '\\mathbb{R}',
+		          set: [ '\\left\\{#1 \\; ; \\; #2\\right\\}', 2 ]
+		        }
+		      }
+		    },
+          
+            plugins: [ RevealHighlight, RevealMath ]
+		  });
+		</script>
+ 
+	</body>
+</html>
